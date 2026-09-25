@@ -279,6 +279,7 @@ em.idle { color: var(--blue); }
   background: #f3efe6;
   margin-top: 8px;
 }
+a.worker { color: var(--brass); }
 .files ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
 .files .text { text-align: left; width: 100%; }
 .file-view, .diff, .tall { max-height: 420px; min-height: 180px; }

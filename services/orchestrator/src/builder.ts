@@ -230,14 +230,12 @@ export function localBuildNote(kurdish: boolean, paths: string[]) {
     return (
       `SAM ئەم فایلانەی نووسی لە وۆرکسپەیسی سێرڤەر: ${list}.\n\n` +
       "پێشبینین، git diff و لیستی فایل لە لای ڕاستن. " +
-      "مێشکی مۆدێل هێشتا بەستراو نییە، بۆیە ئەم دەستپێکە لەسەر سێرڤەر دروست کرا. " +
-      "کاتێک MODEL_BASE_URL دابنێیت، هەمان فایلەکان دەستکاری دەکرێن. بڵاوکردنەوەی دەرەکی دانەنراوە."
+      "مێشکی مۆدێل بەردەست نەبوو، بۆیە ئەم دەستپێکە لەسەر سێرڤەر دروست کرا."
     );
   }
   return (
     `SAM wrote these files on the server workspace: ${list}.\n\n` +
     "Preview, git diff, and the file list are on the right. " +
-    "The model brain is still offline, so this first draft was built on the server. " +
-    "When MODEL_BASE_URL is set, SAM edits these same files. No external deploy host is configured."
+    "The model brain was unavailable, so this draft was built on the server."
   );
 }

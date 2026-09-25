@@ -51,7 +51,11 @@ const httpServer = createServer(async (req, res) => {
     res.end(JSON.stringify({ ok: true, service: "sam-gateway" }));
     return;
   }
-  if (req.method === "GET" && (req.url ?? "").startsWith("/preview/")) {
+  const requestPath = req.url ?? "";
+  if (
+    req.method === "GET" &&
+    (requestPath.startsWith("/preview/") || requestPath.startsWith("/sites/"))
+  ) {
     try {
       const upstream = await fetch(`${orchestratorUrl}${req.url}`, {
         headers: { authorization: `Bearer ${token}` },

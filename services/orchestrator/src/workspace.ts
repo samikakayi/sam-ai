@@ -136,9 +136,48 @@ export function workspaceDiff(projectId: string) {
   }
 }
 
+function publishedFile(projectId: string) {
+  if (!/^[a-zA-Z0-9-]+$/.test(projectId)) throw new Error("Invalid project id");
+  return join(rootDir(), "..", "published", `${projectId}.json`);
+}
+
+export function readPublish(projectId: string): { at: string; path: string } | null {
+  try {
+    return JSON.parse(readFileSync(publishedFile(projectId), "utf8")) as {
+      at: string;
+      path: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function publishExistingSites() {
+  if (!existsSync(rootDir())) return;
+  for (const name of readdirSync(rootDir())) {
+    if (!/^[a-zA-Z0-9-]+$/.test(name)) continue;
+    const page = join(rootDir(), name, "index.html");
+    if (existsSync(page) && statSync(page).isFile()) publishWorkspace(name);
+  }
+}
+
+export function publishWorkspace(projectId: string) {
+  const files = listWorkspace(projectId);
+  if (files.length === 0) return null;
+  const record = {
+    at: new Date().toISOString(),
+    path: `/sites/${projectId}/`,
+  };
+  const file = publishedFile(projectId);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(record, null, 2));
+  return record;
+}
+
 export function workspaceSnapshot(projectId: string) {
   const files = listWorkspace(projectId);
   const hasPage = files.some((file) => file.path === "index.html");
+  const published = readPublish(projectId);
   const build = hasPage
     ? "Static site ready"
     : files.length > 0
@@ -149,7 +188,7 @@ export function workspaceSnapshot(projectId: string) {
     diff: workspaceDiff(projectId),
     previewPath: hasPage ? `/preview/${projectId}/index.html?v=${Date.now()}` : "",
     build,
-    deploy: "No deploy host configured",
+    deploy: published ? `Published ${published.path}` : "Not published",
   };
 }
 

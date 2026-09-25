@@ -5,12 +5,15 @@ import { brainStatus, toolStatus } from "./model.js";
 import { orchestrate, projectHistory } from "./orchestrate.js";
 import {
   contentType,
+  readPublish,
   readWorkspaceFile,
   readWorkspaceText,
+  publishExistingSites,
   workspaceSnapshot,
 } from "./workspace.js";
 
 loadRootEnv(import.meta.url);
+publishExistingSites();
 const token = requireAccessToken();
 const host = process.env.ORCH_HOST?.trim() || "127.0.0.1";
 const port = Number(process.env.ORCH_PORT ?? 8788);
@@ -92,11 +95,21 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname.startsWith("/preview/")) {
-    const rest = decodeURIComponent(url.pathname.slice("/preview/".length));
+  if (
+    req.method === "GET" &&
+    (url.pathname.startsWith("/preview/") || url.pathname.startsWith("/sites/"))
+  ) {
+    const site = url.pathname.startsWith("/sites/");
+    const prefix = site ? "/sites/" : "/preview/";
+    const rest = decodeURIComponent(url.pathname.slice(prefix.length));
     const slash = rest.indexOf("/");
-    const projectId = slash === -1 ? rest : rest.slice(0, slash);
+    const projectId = (slash === -1 ? rest : rest.slice(0, slash)).replace(/\/$/, "");
     const rel = (slash === -1 ? "index.html" : rest.slice(slash + 1)) || "index.html";
+    if (site && !readPublish(projectId)) {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("not published");
+      return;
+    }
     try {
       const body = readWorkspaceFile(projectId, rel);
       res.writeHead(200, {

@@ -9,6 +9,7 @@ export default defineConfig({
     host: "127.0.0.1",
     proxy: {
       "/preview": "http://127.0.0.1:8797",
+      "/sites": "http://127.0.0.1:8797",
     },
     fs: {
       allow: [fileURLToPath(new URL("../..", import.meta.url))],

@@ -7,9 +7,11 @@ import { draftProject, parseFileBlocks } from "./builder.js";
 import {
   commitWorkspace,
   listWorkspace,
+  publishWorkspace,
   readWorkspaceText,
   resolveInside,
   workspaceDiff,
+  workspaceSnapshot,
   writeWorkspaceFile,
 } from "./workspace.js";
 
@@ -34,6 +36,9 @@ test("writes files, commits them, and exposes a diff", () => {
   assert.ok(files.includes("index.html"));
   assert.match(readWorkspaceText("tea", "index.html"), /dir="rtl"/);
   assert.match(workspaceDiff("tea"), /index.html/);
+  const published = publishWorkspace("tea");
+  assert.equal(published?.path, "/sites/tea/");
+  assert.match(workspaceSnapshot("tea").deploy, /Published \/sites\/tea\//);
 });
 
 test("parses FILE blocks and ignores unsafe paths", () => {

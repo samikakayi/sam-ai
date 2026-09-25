@@ -9,6 +9,7 @@ import { assessRisk, needsConfirmation } from "./risk.js";
 import {
   commitWorkspace,
   listWorkspace,
+  publishWorkspace,
   verifyWorkspace,
   workspaceSnapshot,
   writeWorkspaceFile,
@@ -119,7 +120,18 @@ export async function orchestrate(
   if (confirm) {
     answer = heldAnswer(kurdish);
     emit({ type: "token", text: answer });
-  } else if (modelConfig().online && shouldWrite) {
+  } else if (intent.id === "deploy") {
+    const published = publishWorkspace(project.id);
+    answer = published
+      ? kurdish
+        ? `بڵاوکرایەوە: http://127.0.0.1:8797${published.path}`
+        : `Published at http://127.0.0.1:8797${published.path}`
+      : kurdish
+        ? "هیچ فایلێک نییە بۆ بڵاوکردنەوە. سەرەتا وێبسایتێک دروست بکە."
+        : "There are no files to publish. Build the project first.";
+    emit({ type: "terminal", line: published ? `published ${published.path}` : "publish skipped" });
+    emit({ type: "token", text: answer });
+  } else if (modelConfig().online) {
     emit({
       type: "agent.update",
       agent: "coder",
@@ -130,12 +142,10 @@ export async function orchestrate(
     const system = [
       "You are SAM, the coder inside a self-hosted orchestrator.",
       "Reply in the same language as the user.",
-      "When creating or editing files, output each one as:",
-      "FILE: relative/path",
-      "```lang",
-      "contents",
-      "```",
-      "Do not claim you deployed the project.",
+      shouldWrite
+        ? "When creating or editing files, output each one as:\nFILE: relative/path\n```lang\ncontents\n```"
+        : "Answer in prose. Do not invent file edits.",
+      "Do not claim a deploy unless the user asked to publish.",
       `Intent: ${intent.summary}.`,
       `Existing files: ${existing.map((file) => file.path).join(", ") || "none"}.`,
       memory.facts.length ? `Project memory: ${memory.facts.join(" | ")}` : "Project memory: none yet.",
@@ -149,19 +159,40 @@ export async function orchestrate(
         })),
         (token) => emit({ type: "token", text: token }),
       );
-      wrote = applyDrafts(project.id, parseFileBlocks(answer), intent.summary);
+      if (shouldWrite) {
+        wrote = applyDrafts(project.id, parseFileBlocks(answer), intent.summary);
+        if (wrote.length === 0) {
+          const drafts = draftProject({
+            projectId: project.id,
+            projectName: project.name,
+            text,
+            intent: intent.id,
+            kurdish,
+          });
+          wrote = applyDrafts(project.id, drafts, intent.summary);
+          const note = `\n\n${localBuildNote(kurdish, wrote)}`;
+          answer += note;
+          emit({ type: "token", text: note });
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Model call failed";
       emit({ type: "terminal", line: message });
-      const drafts = draftProject({
-        projectId: project.id,
-        projectName: project.name,
-        text,
-        intent: intent.id,
-        kurdish,
-      });
-      wrote = applyDrafts(project.id, drafts, intent.summary);
-      answer = localBuildNote(kurdish, wrote);
+      if (shouldWrite) {
+        const drafts = draftProject({
+          projectId: project.id,
+          projectName: project.name,
+          text,
+          intent: intent.id,
+          kurdish,
+        });
+        wrote = applyDrafts(project.id, drafts, intent.summary);
+        answer = localBuildNote(kurdish, wrote);
+      } else {
+        answer = kurdish
+          ? `مێشکی مۆدێل وەڵامی نەدایەوە. ${message}`
+          : `The model brain did not answer. ${message}`;
+      }
       emit({ type: "token", text: answer });
     }
   } else if (shouldWrite) {
@@ -182,16 +213,23 @@ export async function orchestrate(
     wrote = applyDrafts(project.id, drafts, intent.summary);
     answer = localBuildNote(kurdish, wrote);
     emit({ type: "token", text: answer });
-  } else if (intent.id === "deploy") {
-    answer = kurdish
-      ? "هیچ خانەخوێیەکی بڵاوکردنەوە دانەنراوە. فایلەکان لە وۆرکسپەیسدان و پێشبینینی ناوخۆیی ئامادەیە."
-      : "No deploy host is configured. The files stay in the workspace, with a local preview.";
-    emit({ type: "token", text: answer });
   } else {
     answer = kurdish
       ? `مێشکی مۆدێل بەستراو نییە. پرسیارەکە: ${intent.summary}. فایلەکانی وۆرکسپەیس نەگۆڕدران.`
       : `The model brain is offline. Question: ${intent.summary}. Workspace files were left unchanged.`;
     emit({ type: "token", text: answer });
+  }
+
+  if (shouldWrite && wrote.length > 0 && listWorkspace(project.id).some((file) => file.path === "index.html")) {
+    const published = publishWorkspace(project.id);
+    if (published) {
+      const line = kurdish
+        ? `\n\nبڵاوکرایەوە: http://127.0.0.1:8797${published.path}`
+        : `\n\nPublished at http://127.0.0.1:8797${published.path}`;
+      answer += line;
+      emit({ type: "token", text: line });
+      emit({ type: "terminal", line: `published ${published.path}` });
+    }
   }
 
   if (answer.includes(process.env.SAM_ACCESS_TOKEN ?? "\u0000")) {
@@ -224,7 +262,7 @@ export async function orchestrate(
     type: "agent.update",
     agent: "devops",
     status: "done",
-    detail: snapshot.previewPath ? snapshot.build : snapshot.deploy,
+    detail: snapshot.deploy === "Not published" ? snapshot.build : snapshot.deploy,
   });
   emit({ type: "terminal", line: check.note });
 

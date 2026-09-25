@@ -8,7 +8,7 @@ export type ModelConfig = {
 
 export function modelConfig(): ModelConfig {
   const baseUrl = (process.env.MODEL_BASE_URL ?? "").trim().replace(/\/$/, "");
-  const model = (process.env.MODEL_NAME ?? "").trim() || "qwen2.5-coder:14b";
+  const model = (process.env.MODEL_NAME ?? "").trim() || "qwen2.5-coder:3b";
   return { baseUrl, model, online: baseUrl.length > 0 };
 }
 
@@ -27,7 +27,7 @@ export function toolStatus(): ToolMap {
     files: "online",
     git: "online",
     build: "online",
-    deploy: "offline",
+    deploy: "online",
     preview: "online",
   };
 }

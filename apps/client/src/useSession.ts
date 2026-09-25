@@ -44,7 +44,7 @@ export function useSession(url: string, token: string, enabled: boolean, attempt
   const [diff, setDiff] = useState("");
   const [previewPath, setPreviewPath] = useState("");
   const [build, setBuild] = useState("Empty workspace");
-  const [deploy, setDeploy] = useState("No deploy host configured");
+  const [deploy, setDeploy] = useState("Not published");
   const [openFile, setOpenFile] = useState<{ path: string; content: string } | null>(null);
 
   const send = useCallback((message: ClientMessage) => {

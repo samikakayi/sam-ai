@@ -293,7 +293,13 @@ export function App() {
         {tab === "Preview" ? (
           <div className="preview-wrap">
             <p className="worker">{session.build}</p>
-            <p className="worker">{session.deploy}</p>
+            {session.deploy.startsWith("Published ") ? (
+              <a className="worker" href={session.deploy.slice("Published ".length)} target="_blank" rel="noreferrer">
+                {session.deploy}
+              </a>
+            ) : (
+              <p className="worker">{session.deploy}</p>
+            )}
             {session.previewPath ? (
               <iframe title="Browser preview" src={session.previewPath} />
             ) : (
