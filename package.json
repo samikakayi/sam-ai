@@ -1,0 +1,17 @@
+{
+  "name": "sam-ai",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev -w @sam/client",
+    "dev:server": "concurrently -n orch,gate -c cyan,yellow \"npm run dev -w @sam/orchestrator\" \"npm run dev -w @sam/gateway\"",
+    "test": "npm test -w @sam/orchestrator"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

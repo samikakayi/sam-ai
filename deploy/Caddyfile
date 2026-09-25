@@ -1,0 +1,5 @@
+# Runs on the server, in front of the gateway. Not on the Zenbook.
+# Point a private DNS name here, then proxy to the gateway only.
+sam.internal {
+	reverse_proxy 127.0.0.1:8797
+}

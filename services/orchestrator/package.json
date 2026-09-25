@@ -1,0 +1,17 @@
+{
+  "name": "@sam/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "test": "tsx --test src/workspace.test.ts"
+  },
+  "dependencies": {
+    "@sam/protocol": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3"
+  }
+}

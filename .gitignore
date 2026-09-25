@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+services/orchestrator/data
+*.log
+.DS_Store

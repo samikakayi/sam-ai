@@ -1,0 +1,16 @@
+{
+  "name": "SAM AI",
+  "short_name": "SAM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10120e",
+  "theme_color": "#10120e",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
