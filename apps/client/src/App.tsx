@@ -31,6 +31,18 @@ export function App() {
   const session = useSession(gateway, token, armed, attempt);
 
   useEffect(() => {
+    if (armed || location.hostname !== "127.0.0.1") return;
+    const saved = sessionStorage.getItem(TOKEN_KEY)?.trim() ?? "";
+    const local = saved || (import.meta.env.VITE_SAM_ACCESS_TOKEN?.trim() ?? "");
+    if (!local) return;
+    sessionStorage.setItem(TOKEN_KEY, local);
+    setToken(local);
+    setStarting(true);
+    setAttempt(1);
+    setArmed(true);
+  }, [armed]);
+
+  useEffect(() => {
     if (session.previewPath && session.previewPath !== seenPreview.current) {
       seenPreview.current = session.previewPath;
       setTab("Preview");

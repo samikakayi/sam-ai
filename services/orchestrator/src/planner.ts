@@ -14,7 +14,7 @@ export function buildPlan(intent: IntentId, kurdish: boolean): PlanStep[] {
     return [
       step("d1", "devops", kurdish ? "دۆخی بیلد و git بپشکنە" : "Inspect build and git state"),
       step("d2", "reviewer", kurdish ? "پشتڕاستکردنەوە پێش بڵاوکردنەوە" : "Confirm before deploy", ["d1"]),
-      step("d3", "devops", kurdish ? "بڵاوکردنەوە لەسەر وۆرکەری دوور" : "Deploy on the remote worker", ["d2"]),
+      step("d3", "devops", kurdish ? "بڵاوکردنەوە لەسەر سێرڤەر" : "Publish on the server", ["d2"]),
       step("d4", "memory", kurdish ? "ئەنجامەکە تۆمار بکە" : "Record the outcome", ["d3"]),
     ];
   }
@@ -33,9 +33,10 @@ export function buildPlan(intent: IntentId, kurdish: boolean): PlanStep[] {
       step("f1", "researcher", kurdish ? "هەڵەکە و شوێنەکەی دیاری بکە" : "Locate the failure"),
       step("f2", "architect", kurdish ? "نەخشەی پەیوەندی چاککردن دابنێ" : "Set the fix dependency graph", ["f1"]),
       step("f3", "coder", kurdish ? "گۆڕانکارییەکە بنووسە" : "Write the change", ["f2"]),
-      step("f4", "tester", kurdish ? "تاقیکردنەوە لەسەر وۆرکەری دوور" : "Run tests on the remote worker", ["f3"]),
+      step("f4", "tester", kurdish ? "پشکنینی HTML و سینتاکسی سکریپت" : "Check HTML and script syntax", ["f3"]),
       step("f5", "reviewer", kurdish ? "بەراورد لەگەڵ داواکاری" : "Compare with the request", ["f3"]),
       step("f6", "memory", kurdish ? "هۆکار و چارەسەر تۆمار بکە" : "Record cause and fix", ["f5"]),
+      step("f7", "devops", kurdish ? "بڵاوکردنەوە ئەگەر پەڕە ئامادە بێت" : "Publish when a page is ready", ["f3"]),
     ];
   }
 
@@ -44,7 +45,8 @@ export function buildPlan(intent: IntentId, kurdish: boolean): PlanStep[] {
     step("b2", "architect", kurdish ? "پلان و نەخشەی پەیوەندی" : "Plan and dependency graph", ["b1"]),
     step("b3", "coder", kurdish ? "جێبەجێکردن" : "Implement", ["b2"]),
     step("b4", "reviewer", kurdish ? "پێداچوونەوەی کۆتایی" : "Final review", ["b3"]),
-    step("b5", "tester", kurdish ? "تاقیکردنەوە کاتێک وۆرکەر هەڵکەوت" : "Test when the worker is attached", ["b3"]),
+    step("b5", "tester", kurdish ? "پشکنینی HTML و سینتاکسی سکریپت" : "Check HTML and script syntax", ["b3"]),
     step("b6", "memory", kurdish ? "بڕیارەکان هەڵبگرە" : "Store the decisions", ["b4"]),
+    step("b7", "devops", kurdish ? "بڵاوکردنەوە ئەگەر پەڕە ئامادە بێت" : "Publish when a page is ready", ["b3"]),
   ];
 }

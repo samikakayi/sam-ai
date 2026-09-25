@@ -114,7 +114,7 @@ export const AGENTS: { id: AgentId; title: string; role: string }[] = [
   {
     id: "coder",
     title: "Coder",
-    role: "Writes the change on the remote workspace",
+    role: "Writes the change on the server workspace",
   },
   {
     id: "reviewer",
@@ -124,12 +124,12 @@ export const AGENTS: { id: AgentId; title: string; role: string }[] = [
   {
     id: "tester",
     title: "Tester",
-    role: "Runs tests on the remote worker",
+    role: "Checks HTML and script syntax",
   },
   {
     id: "devops",
     title: "DevOps",
-    role: "Reports build and deploy on the remote worker",
+    role: "Publishes a finished page on the server",
   },
   {
     id: "memory",

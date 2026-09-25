@@ -7,10 +7,11 @@ import { modelConfig, streamModel } from "./model.js";
 import { buildPlan } from "./planner.js";
 import { assessRisk, needsConfirmation } from "./risk.js";
 import {
+  checkWorkspace,
   commitWorkspace,
   listWorkspace,
   publishWorkspace,
-  verifyWorkspace,
+  workspaceBrief,
   workspaceSnapshot,
   writeWorkspaceFile,
 } from "./workspace.js";
@@ -80,78 +81,61 @@ export async function orchestrate(
   emit({ type: "intent.ready", intent: intent.id, summary: intent.summary });
   emit({ type: "terminal", line: `intent ${intent.id}` });
 
-  emit({
-    type: "agent.update",
-    agent: "architect",
-    status: "running",
-    detail: "Building the dependency graph",
-  });
   const plan = buildPlan(intent.id, kurdish);
-  await wait(40);
   emit({ type: "plan.ready", steps: plan });
-  emit({
-    type: "agent.update",
-    agent: "architect",
-    status: "done",
-    detail: intent.summary,
-  });
 
   const confirm = needsConfirmation(text);
   if (confirm) {
     emit({ type: "terminal", line: "destructive request held for confirmation" });
   }
 
-  const memory = recall(project.id);
-  const existing = listWorkspace(project.id);
-  emit({
-    type: "agent.update",
-    agent: "researcher",
-    status: "done",
-    detail: `${existing.length} workspace file(s)`,
-  });
-  emit({ type: "terminal", line: `workspace files ${existing.length}` });
+  const memory = recall(project.id, text);
+  const shouldWrite =
+    !confirm && intent.id !== "explain" && intent.id !== "research" && intent.id !== "deploy";
+  const ownsAnswer = intent.id === "explain" || intent.id === "research" ? "architect" : "coder";
 
   let answer = "";
   let wrote: string[] = [];
+  let brief = "";
+  let blockPublish = false;
 
-  const shouldWrite =
-    !confirm && intent.id !== "explain" && intent.id !== "research" && intent.id !== "deploy";
+  async function produceAnswer(allowWrite: boolean) {
+    const existing = listWorkspace(project.id);
+    if (!modelConfig().online) {
+      if (allowWrite) {
+        emit({ type: "terminal", line: "model brain offline — writing on the server workspace" });
+        const drafts = draftProject({
+          projectId: project.id,
+          projectName: project.name,
+          text,
+          intent: intent.id,
+          kurdish,
+        });
+        wrote = applyDrafts(project.id, drafts, intent.summary);
+        const note = localBuildNote(kurdish, wrote);
+        emit({ type: "token", text: note });
+        return note;
+      }
+      const note = kurdish
+        ? `مێشکی مۆدێل بەستراو نییە. پرسیارەکە: ${intent.summary}. فایلەکانی وۆرکسپەیس نەگۆڕدران.`
+        : `The model brain is offline. Question: ${intent.summary}. Workspace files were left unchanged.`;
+      emit({ type: "token", text: note });
+      return note;
+    }
 
-  if (confirm) {
-    answer = heldAnswer(kurdish);
-    emit({ type: "token", text: answer });
-  } else if (intent.id === "deploy") {
-    const published = publishWorkspace(project.id);
-    answer = published
-      ? kurdish
-        ? `بڵاوکرایەوە: http://127.0.0.1:8797${published.path}`
-        : `Published at http://127.0.0.1:8797${published.path}`
-      : kurdish
-        ? "هیچ فایلێک نییە بۆ بڵاوکردنەوە. سەرەتا وێبسایتێک دروست بکە."
-        : "There are no files to publish. Build the project first.";
-    emit({ type: "terminal", line: published ? `published ${published.path}` : "publish skipped" });
-    emit({ type: "token", text: answer });
-  } else if (modelConfig().online) {
-    emit({
-      type: "agent.update",
-      agent: "coder",
-      status: "running",
-      detail: modelConfig().model,
-    });
     emit({ type: "terminal", line: `model ${modelConfig().model}` });
     const system = [
       "You are SAM, the coder inside a self-hosted orchestrator.",
       "Reply in the same language as the user.",
-      shouldWrite
+      allowWrite
         ? "When creating or editing files, output each one as:\nFILE: relative/path\n```lang\ncontents\n```"
         : "Answer in prose. Do not invent file edits.",
       "Do not claim a deploy unless the user asked to publish.",
       `Intent: ${intent.summary}.`,
-      `Existing files: ${existing.map((file) => file.path).join(", ") || "none"}.`,
-      memory.facts.length ? `Project memory: ${memory.facts.join(" | ")}` : "Project memory: none yet.",
+      brief || `Existing files: ${existing.map((file) => file.path).join(", ") || "none"}.`,
     ].join("\n");
     try {
-      answer = await streamModel(
+      let full = await streamModel(
         system,
         memory.recent.map((message) => ({
           role: message.role === "sam" ? ("assistant" as const) : ("user" as const),
@@ -159,9 +143,10 @@ export async function orchestrate(
         })),
         (token) => emit({ type: "token", text: token }),
       );
-      if (shouldWrite) {
-        wrote = applyDrafts(project.id, parseFileBlocks(answer), intent.summary);
-        if (wrote.length === 0) {
+      if (allowWrite) {
+        wrote = applyDrafts(project.id, parseFileBlocks(full), intent.summary);
+        const hasPage = existing.some((file) => file.path === "index.html");
+        if (wrote.length === 0 && !hasPage) {
           const drafts = draftProject({
             projectId: project.id,
             projectName: project.name,
@@ -171,14 +156,15 @@ export async function orchestrate(
           });
           wrote = applyDrafts(project.id, drafts, intent.summary);
           const note = `\n\n${localBuildNote(kurdish, wrote)}`;
-          answer += note;
+          full += note;
           emit({ type: "token", text: note });
         }
       }
+      return full;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Model call failed";
       emit({ type: "terminal", line: message });
-      if (shouldWrite) {
+      if (allowWrite) {
         const drafts = draftProject({
           projectId: project.id,
           projectName: project.name,
@@ -187,48 +173,161 @@ export async function orchestrate(
           kurdish,
         });
         wrote = applyDrafts(project.id, drafts, intent.summary);
-        answer = localBuildNote(kurdish, wrote);
-      } else {
-        answer = kurdish
-          ? `مێشکی مۆدێل وەڵامی نەدایەوە. ${message}`
-          : `The model brain did not answer. ${message}`;
+        const note = localBuildNote(kurdish, wrote);
+        emit({ type: "token", text: note });
+        return note;
       }
-      emit({ type: "token", text: answer });
+      const note = kurdish
+        ? `مێشکی مۆدێل وەڵامی نەدایەوە. ${message}`
+        : `The model brain did not answer. ${message}`;
+      emit({ type: "token", text: note });
+      return note;
     }
-  } else if (shouldWrite) {
-    emit({
-      type: "agent.update",
-      agent: "coder",
-      status: "running",
-      detail: "Local workspace builder",
-    });
-    emit({ type: "terminal", line: "model brain offline — writing on the server workspace" });
-    const drafts = draftProject({
-      projectId: project.id,
-      projectName: project.name,
-      text,
-      intent: intent.id,
-      kurdish,
-    });
-    wrote = applyDrafts(project.id, drafts, intent.summary);
-    answer = localBuildNote(kurdish, wrote);
-    emit({ type: "token", text: answer });
-  } else {
-    answer = kurdish
-      ? `مێشکی مۆدێل بەستراو نییە. پرسیارەکە: ${intent.summary}. فایلەکانی وۆرکسپەیس نەگۆڕدران.`
-      : `The model brain is offline. Question: ${intent.summary}. Workspace files were left unchanged.`;
-    emit({ type: "token", text: answer });
   }
 
-  if (shouldWrite && wrote.length > 0 && listWorkspace(project.id).some((file) => file.path === "index.html")) {
-    const published = publishWorkspace(project.id);
-    if (published) {
-      const line = kurdish
-        ? `\n\nبڵاوکرایەوە: http://127.0.0.1:8797${published.path}`
-        : `\n\nPublished at http://127.0.0.1:8797${published.path}`;
-      answer += line;
-      emit({ type: "token", text: line });
-      emit({ type: "terminal", line: `published ${published.path}` });
+  for (const step of plan) {
+    emit({ type: "agent.update", agent: step.agent, status: "running", detail: step.title });
+    emit({ type: "terminal", line: `${step.id} ${step.agent}` });
+    await wait(20);
+
+    if (step.agent === "researcher") {
+      const found = workspaceBrief(project.id);
+      brief = [
+        `Files: ${found.files.map((file) => file.path).join(", ") || "none"}.`,
+        memory.facts.length ? `Retrieved memory: ${memory.facts.join(" | ")}` : "Retrieved memory: none.",
+        found.excerpts.length ? `Excerpts:\n${found.excerpts.join("\n\n")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      emit({
+        type: "agent.update",
+        agent: "researcher",
+        status: "done",
+        detail: `${found.files.length} files, ${memory.matched} memory matches of ${memory.scanned}`,
+      });
+    } else if (step.agent === "architect") {
+      if (ownsAnswer === "architect" && !confirm) {
+        answer = await produceAnswer(false);
+      }
+      emit({
+        type: "agent.update",
+        agent: "architect",
+        status: "done",
+        detail: plan.map((item) => item.id).join(" → "),
+      });
+    } else if (step.agent === "coder") {
+      if (confirm) {
+        answer = heldAnswer(kurdish);
+        emit({ type: "token", text: answer });
+      } else if (ownsAnswer === "coder") {
+        answer = await produceAnswer(shouldWrite);
+      }
+      emit({
+        type: "agent.update",
+        agent: "coder",
+        status: "done",
+        detail: wrote.length ? wrote.join(", ") : "No file changes",
+      });
+    } else if (step.agent === "reviewer") {
+      const stop = new Set([
+        "what",
+        "when",
+        "where",
+        "which",
+        "how",
+        "does",
+        "this",
+        "that",
+        "with",
+        "from",
+        "your",
+        "have",
+        "about",
+        "چیە",
+        "چییە",
+      ]);
+      const terms = text
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((word) => word.length > 2 && !stop.has(word));
+      const covered =
+        terms.length === 0 || terms.some((word) => answer.toLowerCase().includes(word));
+      const files = listWorkspace(project.id);
+      const missingPage = intent.id === "deploy" && files.length === 0;
+      const missingWrite = shouldWrite && wrote.length === 0;
+      const missedQuestion =
+        (intent.id === "explain" || intent.id === "research") && !covered;
+      if (missingPage || missingWrite || missedQuestion) {
+        blockPublish = missingPage || missingWrite;
+        const detail = missingPage
+          ? kurdish
+            ? "هیچ فایلێک نییە بۆ بڵاوکردنەوە"
+            : "No files to publish"
+          : missingWrite
+            ? kurdish
+              ? "هیچ فایلێک نەنووسرا"
+              : "No files were written"
+            : kurdish
+              ? "وەڵامەکە پرسیارەکە ناگرێتەوە"
+              : "Answer missed the question";
+        if (!answer) {
+          answer = detail;
+          emit({ type: "token", text: answer });
+        }
+        emit({ type: "agent.update", agent: "reviewer", status: "blocked", detail });
+      } else {
+        emit({
+          type: "agent.update",
+          agent: "reviewer",
+          status: "done",
+          detail: kurdish ? "لەگەڵ داواکارییەکە دەگونجێت" : "Matches the request",
+        });
+      }
+    } else if (step.agent === "tester") {
+      const check = checkWorkspace(project.id);
+      emit({
+        type: "agent.update",
+        agent: "tester",
+        status: check.ok ? "done" : "blocked",
+        detail: check.note,
+      });
+      emit({ type: "terminal", line: check.note });
+    } else if (step.agent === "devops") {
+      const snapshot = workspaceSnapshot(project.id);
+      const hasPage = snapshot.files.some((file) => file.path === "index.html");
+      const publishing = step.id !== "d1" && !blockPublish && hasPage && (intent.id === "deploy" || shouldWrite);
+      if (publishing) {
+        const published = publishWorkspace(project.id);
+        if (published && !answer.includes(published.path)) {
+          const line = kurdish
+            ? `\n\nبڵاوکرایەوە: http://127.0.0.1:8797${published.path}`
+            : `\n\nPublished at http://127.0.0.1:8797${published.path}`;
+          answer += line;
+          emit({ type: "token", text: line });
+        }
+        emit({
+          type: "agent.update",
+          agent: "devops",
+          status: "done",
+          detail: published ? `Published ${published.path}` : snapshot.deploy,
+        });
+      } else {
+        emit({
+          type: "agent.update",
+          agent: "devops",
+          status: "done",
+          detail: `${snapshot.build}. ${snapshot.deploy}`,
+        });
+      }
+    } else if (step.agent === "memory") {
+      remember(project.id, `${intent.summary}: ${text.slice(0, 180)} → ${wrote.join(", ") || "no files"}`);
+      emit({
+        type: "agent.update",
+        agent: "memory",
+        status: "done",
+        detail: `Stored. Searched ${memory.scanned}, matched ${memory.matched}`,
+      });
+      emit({ type: "terminal", line: "memory write ok" });
     }
   }
 
@@ -238,42 +337,6 @@ export async function orchestrate(
 
   const snapshot = workspaceSnapshot(project.id);
   emit({ type: "workspace", projectId: project.id, ...snapshot });
-  const check = verifyWorkspace(project.id);
-
-  emit({
-    type: "agent.update",
-    agent: "coder",
-    status: "done",
-    detail: wrote.length ? wrote.join(", ") : "No file changes",
-  });
-  emit({
-    type: "agent.update",
-    agent: "reviewer",
-    status: check.ok ? "done" : "blocked",
-    detail: check.note,
-  });
-  emit({
-    type: "agent.update",
-    agent: "tester",
-    status: check.ok ? "done" : "blocked",
-    detail: check.note,
-  });
-  emit({
-    type: "agent.update",
-    agent: "devops",
-    status: "done",
-    detail: snapshot.deploy === "Not published" ? snapshot.build : snapshot.deploy,
-  });
-  emit({ type: "terminal", line: check.note });
-
-  remember(project.id, `${intent.summary}: ${text.slice(0, 180)} → ${wrote.join(", ") || "no files"}`);
-  emit({
-    type: "agent.update",
-    agent: "memory",
-    status: "done",
-    detail: "Fact stored on the server",
-  });
-  emit({ type: "terminal", line: "memory write ok" });
 
   appendMessage(project.id, {
     id: randomUUID(),

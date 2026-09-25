@@ -29,7 +29,7 @@ export function analyzeIntent(text: string): Intent {
       summary: ku ? "کۆکردنەوەی زانیاری" : "Gather references",
     };
   }
-  if (/(explain|چیە|چۆن کار|what is|how does)/i.test(t)) {
+  if (/(explain|چی+ە|چۆن کار|what is|how does)/i.test(t)) {
     return {
       id: "explain",
       summary: ku ? "ڕوونکردنەوەی بیرۆکەکە" : "Explain the idea",

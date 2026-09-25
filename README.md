@@ -10,7 +10,7 @@ SAM AI is the product name.
 | --- | --- | --- |
 | Thin client | Zenbook, `npm run dev:client` | Chat, projects, agents, preview, files, diff, terminal |
 | Gateway | Server, port `8797` | WebSocket, access token, rate limit, preview proxy |
-| Orchestrator | Server, port `8788` | Intent, plan, agents, memory, workspace |
+| Orchestrator | Server, port `8788` | Intent, plan, agents, searchable memory, workspace |
 | Model brain | Ollama on the server, `qwen2.5-coder:3b` | OpenAI-compatible chat at `MODEL_BASE_URL` |
 | Deploy | Gateway `/sites/<id>/` | A site with `index.html` is published on the server |
 
@@ -25,7 +25,9 @@ npm run dev:server
 npm run dev:client
 ```
 
-Open http://127.0.0.1:5173 and paste `SAM_ACCESS_TOKEN` from `.env`.
+Open http://127.0.0.1:5173. On that address the client signs in by itself when `VITE_SAM_ACCESS_TOKEN` matches `SAM_ACCESS_TOKEN`.
+
+Each agent does its own job. Research reads the workspace and searches memory. The architect or coder calls the model. The reviewer checks the answer. The tester checks HTML and script syntax. DevOps publishes a page that contains `index.html`. A question does not rewrite an existing site.
 
 On this machine port `8787` was already taken, so the gateway listens on `8797`.
 
@@ -49,4 +51,4 @@ npm test
 
 ## کوردی
 
-زێنبووک تەنها ڕووکارە. مۆدێل، بیرگە، فایل، git و پێشبینین لەسەر سێرڤەرن. ناوی سیستەمەکە SAM AI ـە.
+زێنبووک تەنها ڕووکارە. مۆدێل، بیرگە، فایل، git و پێشبینین لەسەر سێرڤەرن. لە http://127.0.0.1:5173 خۆی دەچێتە ژوورەوە. ناوی سیستەمەکە SAM AI ـە.

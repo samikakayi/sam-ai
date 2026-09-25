@@ -192,6 +192,39 @@ export function workspaceSnapshot(projectId: string) {
   };
 }
 
+export function workspaceBrief(projectId: string) {
+  const files = listWorkspace(projectId);
+  const preferred = ["index.html", "styles.css", "main.js", "main.py", "server.mjs"];
+  const picked = [
+    ...preferred.filter((path) => files.some((file) => file.path === path)),
+    ...files
+      .map((file) => file.path)
+      .filter((path) => !preferred.includes(path) && !path.endsWith(".png")),
+  ].slice(0, 2);
+  const excerpts = picked.map((path) => `${path}:\n${readWorkspaceText(projectId, path).slice(0, 700)}`);
+  return { files, excerpts };
+}
+
+export function checkWorkspace(projectId: string) {
+  const html = verifyWorkspace(projectId);
+  if (!html.ok) return html;
+  const scripts = listWorkspace(projectId).filter((file) => /\.(mjs|cjs|js)$/.test(file.path));
+  for (const file of scripts) {
+    try {
+      execFileSync(process.execPath, ["--check", resolveInside(projectId, file.path)], {
+        timeout: 15_000,
+        stdio: "pipe",
+      });
+    } catch {
+      return { ok: false, note: `${file.path} failed syntax check` };
+    }
+  }
+  if (scripts.length > 0) {
+    return { ok: true, note: `${html.note}; syntax ok on ${scripts.length} script(s)` };
+  }
+  return html;
+}
+
 export function verifyWorkspace(projectId: string) {
   const files = listWorkspace(projectId);
   const html = files.filter((file) => file.path.endsWith(".html"));

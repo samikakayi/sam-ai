@@ -82,12 +82,45 @@ export function history(projectId: string): ChatMessage[] {
   return getProject(projectId)?.messages ?? [];
 }
 
-export function recall(projectId: string) {
+function tokens(text: string) {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length > 1),
+  );
+}
+
+export function rankMemory(facts: string[], query: string, limit = 6) {
+  const queryTokens = tokens(query);
+  const scored = facts.map((text, index) => {
+    const factTokens = tokens(text);
+    let score = 0;
+    for (const token of queryTokens) {
+      if (factTokens.has(token)) score += 1;
+    }
+    return { text, score, index };
+  });
+  return scored
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || b.index - a.index)
+    .slice(0, limit)
+    .map((item) => item.text);
+}
+
+export function recall(projectId: string, query = "") {
   const project = getProject(projectId);
-  if (!project) return { facts: [] as string[], recent: [] as ChatMessage[] };
+  if (!project) {
+    return { facts: [] as string[], recent: [] as ChatMessage[], scanned: 0, matched: 0 };
+  }
+  const all = project.facts.map((fact) => fact.text);
+  const matched = query ? rankMemory(all, query, all.length) : all;
+  const facts = (matched.length > 0 ? matched : all.slice(-4)).slice(0, 6);
   return {
-    facts: project.facts.slice(-8).map((fact) => fact.text),
+    facts,
     recent: project.messages.slice(-6),
+    scanned: all.length,
+    matched: matched.length,
   };
 }
 
